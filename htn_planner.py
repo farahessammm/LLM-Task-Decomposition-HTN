@@ -4,7 +4,7 @@
 
 from LLM_utils import groq_is_goal, is_task_primitive, can_execute, log_state_change
 from LLM_api import call_groq_api, log_response
-from task_node import TaskNode
+from task_node import TaskNode 
 from text_utils import extract_lists, trace_function_calls
 from htn_prompts import *
 from vector_db import VectorDB
@@ -21,6 +21,8 @@ class HTNPlanner:
     def htn_planning(self):
         db = VectorDB()
         root_node = TaskNode(self.goal_input)
+        root_node.context = [f"Initial task reasoning for goal: {self.goal_task}"]
+        root_node.reason_through_task()
         max_iterations = 100  # Adjust this value as needed
 
         print(f"Initial goal: {self.goal_task}")
@@ -80,6 +82,7 @@ class HTNPlanner:
     def decompose(self, task_node, state, depth, max_depth, capabilities_input, goal_state, db, send_update_callback=None, task_history=None):
         task = task_node.task_name
         decompose_state = state
+        # self.reason_through_task(task_node)
 
         print(f"Decomposing task (depth {depth}/{max_depth}): {task}")
 
@@ -106,12 +109,18 @@ class HTNPlanner:
 
         for subtask in subtasks_list:
             subtask_node = TaskNode(subtask, parent=task_node)
+            # print(f"Parent context before passing to subtask: {task_node.context}")
+            subtask_node.context = task_node.context.copy()
+            # print(f"Subtask context after copying: {subtask_node.context}")
+            # self.reason_through_task(subtask_node)
+            subtask_node.reason_through_task()
             task_node.add_child(subtask_node)
+            
             
             if is_task_primitive(subtask):
                 if can_execute(subtask, capabilities_input, decompose_state):
                     print(f"Executing task: {subtask}")
-                    updated_state = self.execute_task(decompose_state, subtask)
+                    updated_state = self.execute_task(decompose_state, subtask_node)
                     decompose_state = updated_state
                     subtask_node.status = "completed"
             else:
@@ -166,13 +175,16 @@ class HTNPlanner:
 
 
     @trace_function_calls
-    def execute_task(self, state, task):
-        prompt = (f"Given the current state '{state}' and the task '{task}', "
-                f"update the state after executing the task:")
+    def execute_task(self, state, task_node):
+        prompt = (f"Given the current state '{state}' and the task '{task_node.task_name}', "
+                f"update the state after executing the task:"
+                f"reason through the task based on the following context: '{task_node.context}'.")
 
         response = call_groq_api(prompt)
 
         updated_state = response.choices[0].message.content.strip()
-        log_response("execute_task", task)
-        log_state_change(state, updated_state, task)
+        log_response("execute_task", task_node)
+        task_node.context.append(f"Executed task: {task_node.task_name}, ResultTTTT: {updated_state}")
+        log_state_change(state, updated_state, task_node)
+        print(f"Updated state after task '{task_node.task_name}': {updated_state}")
         return updated_state
