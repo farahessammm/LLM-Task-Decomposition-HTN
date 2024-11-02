@@ -55,6 +55,7 @@ def print_plan(task_node, depth=0):
         print_plan(child, depth + 1)
 
 def main():
+    print("STARTING THE SYSTEM")
     initial_state = input("Describe the initial state: ")
     goal = input("Describe your goal: ")
     default_capabilities = "Manipulation actions (grab, push, pull, ...); Movement actions (move, reach, ...); Kitchen tasks (cook, bake, boil, ...); Cleaning tasks (clean, wipe, vacuum, ...); Miscellaneous tasks (scan, activate, identify, ...)"
@@ -81,6 +82,10 @@ def main():
         print_plan(plan)
     else:
         print("\nNo valid plan found.")
+        print(f"Initial state: {initial_state}")
+        print(f"Goal task: {goal_task}")
+        print(f"Capabilities: {compressed_capabilities}")
+        print(f"Goal: {goal}")
 
     server_thread.join()
 

@@ -1,69 +1,75 @@
-import chromadb
-
+import sqlite3
+import json
 
 class VectorDB:
-    def __init__(self):
-        # Create a chroma client
-        self.client = chromadb.Client()
+    def __init__(self, db_path="task_history.db"):
+        # Initialize SQLite connection and create table if not exists
+        self.conn = sqlite3.connect(db_path)
+        self.create_table()
 
-        # Create a collection
-        self.collection = self.client.create_collection("task_nodes")
+    def create_table(self):
+        # Create a table to store task nodes if it doesn't already exist
+        query = '''
+        CREATE TABLE IF NOT EXISTS task_nodes (
+            node_name TEXT PRIMARY KEY,
+            task TEXT,
+            context TEXT,
+            state TEXT
+        )
+        '''
+        self.conn.execute(query)
+        self.conn.commit()
 
-    def add_task_node(self, task_node):
-        # metadata = serialize_task_node(task_node)
-        metadata = serialize_task_node(task_node)
-        print("metadata: ", metadata)
-      #  self.collection.upsert(documents=[task_node.task_name], ids=[task_node.node_name], metadatas=[metadata])
-        self.collection.upsert(documents=[task_node.task_name], ids=[task_node.node_name])
+    def add_task_node(self, task_node, task=None, context=None, state=None):
+        task = task or "Unknown Task"  # Default to 'Unknown Task' if task is None
+        context = json.dumps(context or [])  # Serialize the context to store as text
+        state = state or "No state available"
+
+        # Insert or replace the task node data in SQLite
+        query = '''
+        INSERT OR REPLACE INTO task_nodes (node_name, task, context, state)
+        VALUES (?, ?, ?, ?)
+        '''
+        self.conn.execute(query, (task_node.node_name, task, context, state))
+        self.conn.commit()
+
+        print(f"Storing metadata for task '{task_node.node_name}': Task='{task}', State='{state}'")
 
     def get_task_node(self, task_node):
-        return self.collection.get(ids=[task_node.node_name])[0]
+        query = "SELECT * FROM task_nodes WHERE node_name = ?"
+        cursor = self.conn.execute(query, (task_node.node_name,))
+        row = cursor.fetchone()
 
-    # def query_by_name(self, task_name):
-    #     task_nodes = self.collection.query(query_texts=[task_name], n_results=1)
-    #     return task_nodes['metadatas'][0]
+        if row:
+            metadata = {
+                'task': row[1],
+                'context': json.loads(row[2]),  # Deserialize the JSON context
+                'state': row[3]
+            }
+            return metadata
+        else:
+            raise ValueError(f"Task '{task_node.node_name}' not found in the database.")
 
+    def get_all_task_nodes(self):
+        # Fetch all task nodes from the SQLite database
+        query = "SELECT * FROM task_nodes"
+        cursor = self.conn.execute(query)
+        rows = cursor.fetchall()
 
+        tasks = []
+        for row in rows:
+            tasks.append({
+                'node_name': row[0],
+                'task': row[1],
+                'context': json.loads(row[2]),
+                'state': row[3]
+            })
+        return tasks
 
-    def add_task_node(self, task_node):
-        # metadata = serialize_task_node(task_node)
-        metadata = serialize_task_node(task_node)
-        print("metadata: ", metadata)
-      #  self.collection.upsert(documents=[task_node.task_name], ids=[task_node.node_name], metadatas=[metadata])
-        self.collection.upsert(documents=[task_node.task_name], ids=[task_node.node_name])
+    def delete_task_node(self, task_node):
+        # Delete a task node from the SQLite database
+        query = "DELETE FROM task_nodes WHERE node_name = ?"
+        self.conn.execute(query, (task_node.node_name,))
+        self.conn.commit()
 
-    # def get_task_node(self, task_node):
-    #     return self.collection.get(ids=[task_node.node_name])['metadatas'][0]
-
-    # def query_by_name(self, task_name):
-    #     task_nodes = self.collection.query(query_texts=[task_name], n_results=1)
-    #     return task_nodes['metadatas'][0]
-
-def serialize_task_node(task_node):
-    # Create a dictionary with all attributes that need to be serialized
-    serialized_data = {
-        'task_name': task_node.task_name,
-        'node_name': task_node.node_name,
-        'status': task_node.status,
-        'children': [child.node_name for child in task_node.children]  # assuming children is a list of TaskNode objects
-    }
-    # Optionally, include parent's node_name if it exists and is necessary
-    if hasattr(task_node, 'parent') and task_node.parent is not None:
-        serialized_data['parent'] = task_node.parent.node_name
-    else:
-        serialized_data['parent'] = None
-
-    return serialized_data
-
-def serialize_task_node(task_node):
-    # Prepare the dictionary with all necessary fields
-    serialized_data = {
-        'task_name': task_node.task_name,
-        'node_name': task_node.node_name,
-        'status': task_node.status,
-        # Convert parent node to its node_name or None if no parent
-        'parent': task_node.parent.node_name if task_node.parent else None,
-        # Convert children nodes to a list of their node_names
-        'children': [child.node_name for child in task_node.children] if task_node.children else []
-    }
-    return serialized_data
+        print(f"Task '{task_node.node_name}' deleted from the database.")
