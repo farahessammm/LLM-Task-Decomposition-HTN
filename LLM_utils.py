@@ -17,21 +17,24 @@ def generate_hierarchy_embedding(goal, subtasks, goal_weight=0.8):
     goal_embedding = model.encode(goal, convert_to_tensor=True)
     
     # Re-contextualize each subtask with the goal to improve alignment
-    contextualized_subtasks = [f"{goal} - task type: Primary - step: {subtask}" for subtask in subtasks]
+    contextualized_subtasks = [f"{goal}. Step: {subtask}" for subtask in subtasks]
     subtask_embeddings = model.encode(contextualized_subtasks, convert_to_tensor=True)
-    
+    # print(goal_weight ,"gw")
+    # print(goal_embedding, "ge")
+    # print(subtask_embeddings ,"se")
     # Calculate a cumulative embedding that weighs the goal and average subtask embeddings
     cumulative_embedding = goal_weight * goal_embedding + (1 - goal_weight) * subtask_embeddings.mean(axis=0)
     
     return cumulative_embedding
 
-def calculate_similarity(parent_task, subtask):
+def calculate_similarity(parent_task, subtask,  goal_embedding=None):
     """
     Calculate similarity between the parent task and each subtask.
     """
     # Generate embeddings for the parent task and subtask, ensuring they are tensors
-    parent_embedding = model.encode(parent_task, convert_to_tensor=True)
-    subtask_embedding = model.encode(subtask, convert_to_tensor=True)
+    contextualized_subtask = f"{parent_task}: {subtask}"
+    parent_embedding = model.encode(parent_task, convert_to_tensor=True) if goal_embedding is None else goal_embedding
+    subtask_embedding = model.encode(contextualized_subtask, convert_to_tensor=True)
     
     # Compute similarity
     similarity_score = util.pytorch_cos_sim(parent_embedding, subtask_embedding).item()
@@ -64,18 +67,20 @@ def is_task_primitive(task_name):
     
     primitive_actions_keywords = [
         'grab', 'reach', 'twist', 'move', 'push', 'pull', 'lift', 'hold',
-        'release', 'turn', 'rotate', 'locate', 'identify', 'find', 'pick',
+        'release', 'turn', 'rotate', 'locate', 'identify', 'find', 'pick', 'book',
         'place', 'put', 'insert', 'remove', 'open', 'close', 'clean',
-        'wipe', 'sweep', 'mop', 'vacuum','dust', 'wash', 'rinse', 'cook', 'heat',
+        'wipe', 'sweep', 'mop', 'vacuum', 'dust', 'wash', 'rinse', 'cook', 'heat',
         'boil', 'fry', 'bake', 'microwave', 'cut', 'slice', 'dice', 'chop', 'examine',
         'grate', 'peel', 'mix', 'blend', 'stir', 'pour', 'serve', 'stop', 'scan', 'activate'
-    ]
+        ]
 
     for word in task_words:
         lemma = lemmatizer.lemmatize(word)
         if lemma in primitive_actions_keywords:
+            # print("is task primtive?", "yes")
             return True
     
+    # print("is task primtive?", "No")
     return False
 
 @trace_function_calls
@@ -97,13 +102,15 @@ def can_execute(task, capabilities, state):
         f"Task: '{task}'\n"
         f"Current State: '{state}'\n"
         f"Available Capabilities: {capabilities}\n"
-        "Is the task a primitive action that can be directly executed given the current state and capabilities? "
-        "if the first word of the task is the same as one of the capabilities it can be executed"
-        "Answer with 'True' or 'False' only."
+        "Given the task, current state, and available capabilities, determine if this task can be executed directly:\n"
+        "- If the task explicitly matches any of the listed capabilities and does not require further decomposition, answer 'True'.\n"
+        "- Otherwise, answer 'False'.\n"
+        "Provide your answer as 'True' or 'False' only."
     )
+    # print("inside can_execute")
     # print("prompt for can_execute" , prompt)
     response = call_groq_api(prompt, strip=True)
-    # print(response, "can execute inside utils")
+    # print("can execute response", response)
 
     log_response("can_execute", response)
     return response.lower() == "true"

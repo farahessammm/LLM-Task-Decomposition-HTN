@@ -32,12 +32,21 @@ class TaskNode:
     
     @trace_function_calls
     def reason_through_task(self):
-    # Generate reasoning for the task and add it to the context
-            reasoning_prompt = f"Reason through the task: '{self.task_name}' given the current context: '{self.context}' , give reasoning step by step but make it 2-3 sentences each."
-            response = call_groq_api(reasoning_prompt)
-            reasoning_step = response.choices[0].message.content.strip()
-            self.add_reasoning(reasoning_step)
-              # Add reasoning to the task context
+        reasoning_prompt = (
+        f"Generate a concise, actionable reasoning for the task '{self.task_name}' "
+        f"based on the current context: '{self.context}'. "
+        f"Ensure the reasoning specific, insightful, and beneficial that provides clear guidance for the next steps or handling similar tasks."
+        f"give reasoning that is sensible to a robot capabilities not overly detailed"
+        f"give reasoning that would benefit the next step only not all the steps"
+        f"Avoid reasoning that are not essential to complete the task."
+        )
+        response = call_groq_api(reasoning_prompt)
+        reasoning_step = response.choices[0].message.content.strip()
+        # print(f"reasoning for the task {self.task_name} : " , reasoning_step)
+        self.add_reasoning(reasoning_step)
+
+        # print(f"Reasoning added for task '{self.task_name}': {reasoning_step}")
+
 
     @trace_function_calls
     def remove_child(self, child_node):

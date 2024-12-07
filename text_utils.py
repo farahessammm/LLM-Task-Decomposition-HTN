@@ -66,3 +66,21 @@ def extract_lists(text):
         cleaned_list.append(cleaned_item)
 
     return cleaned_list
+
+def preprocess_task_name(task_name):
+    stopwords = {
+    "the", "a", "an", "of", "to", "in", "for", "on", "with", "and", "or",
+    "by", "at", "from", "is", "it", "this", "that", "which", "as", "be",
+    "are", "am", "was", "were", "been", "have", "has", "had", "do", "does",
+    "did", "can", "could", "would", "should", "will", "shall", "may", "might",
+    "must", "such", "each", "any", "all", "one", "two", "up"}
+    # Remove punctuation and split the task into words
+    words = re.findall(r'\b\w+\b', task_name.lower())
+    
+    # Remove stopwords
+    filtered_words = [word for word in words if word not in stopwords]
+    
+    # Join words back into a single standardized task name
+    standardized_task = ' '.join(filtered_words)
+    
+    return standardized_task

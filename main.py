@@ -69,10 +69,10 @@ def main():
 
     print("\nUsing default HTN planner")
     print("Starting server...")
-
+    
     htn_planner = HTNPlanner(goal, initial_state, goal_task, compressed_capabilities, send_update_callback=send_task_node_update)
     
-    server_thread = threading.Thread(target=run_server)
+    server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
     plan = htn_planner.htn_planning()
