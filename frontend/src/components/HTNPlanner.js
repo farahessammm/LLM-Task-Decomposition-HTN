@@ -1,76 +1,138 @@
 import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
-import { Paper, Typography, List, ListItem, ListItemIcon, ListItemText, Collapse, IconButton } from '@mui/material';
-import { ArrowRight, ExpandLess, ExpandMore } from '@mui/icons-material';
+import { Paper, Typography, TextField, Button } from '@mui/material';
 
 function HTNPlanner() {
-  const [taskNode, setTaskNode] = useState(null);
-  const [expandedNodes, setExpandedNodes] = useState({});
+  const [initialState, setInitialState] = useState('');
+  const [goal, setGoal] = useState('');
+  const [capabilities, setCapabilities] = useState('');
+  const [finalPlan, setFinalPlan] = useState(null);
+  const [realTimeLogs, setRealTimeLogs] = useState([]);
+  const [validationPrompt, setValidationPrompt] = useState('');
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    const newSocket = io('http://127.0.0.1:5000');
+    const newSocket = io('http://127.0.0.1:5000', {
+      transports: ['websocket', 'polling'],
+    });
+    setSocket(newSocket);
 
-    newSocket.on('connect', () => {
-      console.log('Socket connected');
+    // Listen for 'planResult' event
+    newSocket.on('planResult', (data) => {
+      if (data.error) {
+        setFinalPlan(`Error: ${data.error}`);
+      } else {
+        setFinalPlan(data.plan || data);
+      }
     });
 
-    newSocket.on('task_node_update', (data) => {
-      console.log('Received task_node_update:', data);
-      setTaskNode(data);
-      setExpandedNodes(prev => ({ ...prev, [data.task_name]: true }));
+    // Listen for real-time updates
+    newSocket.on('realTimeUpdate', (data) => {
+      setRealTimeLogs((prevLogs) => [...prevLogs, data.message]);
     });
 
-    return () => newSocket.close();
+    // Listen for validation prompts
+    newSocket.on('validationPrompt', (data) => {
+      setValidationPrompt(data.prompt);
+    });
+
+    return () => newSocket.disconnect();
   }, []);
 
-  const handleToggle = (node) => {
-    setExpandedNodes(prev => ({
-      ...prev,
-      [node.task_name]: !prev[node.task_name]
-    }));
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "completed": return "green";
-      case "in-progress": return "blue";
-      case "failed": return "red";
-      default: return "grey";
+  const handleStart = () => {
+    if (socket) {
+      socket.emit('startPlanning', {
+        initialState,
+        goal,
+        capabilities,
+      });
     }
   };
 
-  const renderTaskNode = (node, depth = 0) => {
-    if (!node) return null;
-
-    return (
-      <List style={{ marginLeft: depth * 20 }}>
-        <ListItem>
-          <ListItemIcon>
-            <ArrowRight style={{ color: getStatusColor(node.status) }} />
-          </ListItemIcon>
-          <ListItemText primary={`${node.task_name} (${node.status})`} />
-          {node.children && node.children.length > 0 && (
-            <IconButton edge="end" onClick={() => handleToggle(node)}>
-              {expandedNodes[node.task_name] ? <ExpandLess /> : <ExpandMore />}
-            </IconButton>
-          )}
-        </ListItem>
-        <Collapse in={expandedNodes[node.task_name]} timeout="auto" unmountOnExit>
-          {node.children && node.children.map((child, index) => renderTaskNode(child, depth + 1))}
-        </Collapse>
-      </List>
-    );
+  const handleValidationResponse = (response) => {
+    if (socket) {
+      socket.emit('validationResponse', { response });
+      setValidationPrompt('');
+    }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 20 }}>
-      <Typography variant="h4" gutterBottom>
-        HTN Planner Visualization
-      </Typography>
-      <Paper style={{ width: '80%', padding: 20, overflow: 'auto', maxHeight: '80vh' }}>
-        {taskNode ? renderTaskNode(taskNode) : <Typography>Waiting for data...</Typography>}
-      </Paper>
-    </div>
+    <Paper style={{ padding: 20 }}>
+      <Typography variant="h4">HTN Planner Visualization</Typography>
+
+      <TextField
+        label="Initial State"
+        fullWidth
+        margin="normal"
+        value={initialState}
+        onChange={(e) => setInitialState(e.target.value)}
+      />
+
+      <TextField
+        label="Goal"
+        fullWidth
+        margin="normal"
+        value={goal}
+        onChange={(e) => setGoal(e.target.value)}
+      />
+
+      <TextField
+        label="Capabilities"
+        fullWidth
+        margin="normal"
+        value={capabilities}
+        onChange={(e) => setCapabilities(e.target.value)}
+      />
+
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={handleStart}
+        style={{ marginTop: 10 }}
+      >
+        Start
+      </Button>
+
+      {realTimeLogs.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <Typography variant="h5">Real-Time Logs:</Typography>
+          <pre>
+            {realTimeLogs.map((log, index) => (
+              <div key={index}>{log}</div>
+            ))}
+          </pre>
+        </div>
+      )}
+
+      {validationPrompt && (
+        <div style={{ marginTop: 20 }}>
+          <Typography variant="h5">Validation Required:</Typography>
+          <Typography>{validationPrompt}</Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => handleValidationResponse('yes')}
+            style={{ marginRight: 10 }}
+          >
+            Yes
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={() => handleValidationResponse('no')}
+          >
+            No
+          </Button>
+        </div>
+      )}
+
+      {finalPlan && (
+        <div style={{ marginTop: 20 }}>
+          <Typography variant="h5">Final Plan:</Typography>
+          <pre>{JSON.stringify(finalPlan, null, 2)}</pre>
+        </div>
+      )}
+    </Paper>
   );
 }
 

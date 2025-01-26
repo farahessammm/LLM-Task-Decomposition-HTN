@@ -5,126 +5,88 @@ import re
 from openai.embeddings_utils import cosine_similarity
 import time
 
-def is_granular(task, capabilities_input):
-    prompt = f"""Given the capabilities {capabilities_input}, is the task '{task}' granular enough to be directly executed or considered a primitive action by a robot based on 
-    the capabilities given? For instance, if a task includes the word scan, place then it's granular because scanning can't be further broken down.
-    Answer with "Yes" or "No" only."""
-    response = call_groq_api(prompt, strip=True)
-    # print(f"Prompt: {prompt}")
-    # print("is the task granular enough? " , response)
-    if(response == "yes"):
-        return True
-    elif(response == "No"):
-        return False
-    return response == "Yes"
+# def is_granular(task, capabilities_input):
+#     prompt = f"""Given the capabilities {capabilities_input}, is the task '{task}' granular enough to be directly executed or considered a primitive action by a robot based on 
+#     the capabilities given? For instance, if a task includes the word scan, place then it's granular because scanning can't be further broken down.
+#     Answer with "Yes" or "No" only."""
+#     response = call_groq_api(prompt, strip=True)
+#     # print(f"Prompt: {prompt}")
+#     # print("is the task granular enough? " , response)
+#     if(response == "yes"):
+#         return True
+#     elif(response == "No"):
+#         return False
+#     return response == "Yes"
 
-def translate(goal_input, original_task, capabilities_input, context):
-    reasoning_context = "\n".join(
-        f"- {entry['reasoning']}" for entry in context if isinstance(entry, dict) and 'reasoning' in entry
-    )
-    prompt = f"""Given this parent goal {goal_input}, translate the task '{original_task}', 
-    use the following reasoning context:\n{reasoning_context}\n\n
-    Translate the task into a form that can be executed by a robot using the following capabilities:
-    '{capabilities_input}'. Provide the executable form in a single line without any commentary
-    or superfluous text.
+# def translate(goal_input, original_task, capabilities_input, context):
+#     reasoning_context = "\n".join(
+#         f"- {entry['reasoning']}" for entry in context if isinstance(entry, dict) and 'reasoning' in entry
+#     )
+#     prompt = f"""Given this parent goal {goal_input}, translate the task '{original_task}', 
+#     use the following reasoning context:\n{reasoning_context}\n\n
+#     Translate the task into a form that can be executed by a robot using the following capabilities:
+#     '{capabilities_input}'. Provide the executable form in a single line without any commentary
+#     or superfluous text.
     
-    When translated to use the specified capabilities the result is:"""
+#     When translated to use the specified capabilities the result is:"""
 
-    response = call_groq_api(prompt, strip=True)
-    return response
+#     response = call_groq_api(prompt, strip=True)
+#     return response
 
-def evaluate_candidate(goal_input, task, subtasks, capabilities_input, task_history):
-    prompt = f"""Given the parent goal {goal_input}, and the parent task {task}, and its subtasks {subtasks}, 
-    evaluate how well these subtasks address the requirements 
-    of the parent task without any gaps or redundancies, using the following capabilities: 
-    {capabilities_input}
-    Return a score between 0 and 1, where 1 is the best possible score.
-    
-    Consider the following task history to avoid repetition:
-    {', '.join(task_history)}
-
-    Please follow this regex expression: ^[0]\.\d{{8}}$
-    Provide only the score without any additional text.
-    """
-
-    response = call_groq_api(prompt, strip=True)
-    print("scoreeeee", response)
-    return response
-
-def check_subtasks(task, subtasks, capabilities_input, task_history):
-    prompt = f"""Given the parent task {task}, and its subtasks {', '.join(subtasks)},
-    check if these subtasks effectively and comprehensively address the requirements
-    of the parent task without any gaps or redundancies, using the following capabilities:
-    {capabilities_input}. Return 'True' if they meet the requirements or 'False' otherwise.
-    
-    Consider the following task history to avoid repetition:
-    {', '.join(task_history)}
-    """
-
-    response = call_groq_api(prompt, strip=True)
-    return response.lower() == 'true'
 
 def get_subtasks(task, state, remaining_decompositions, capabilities_input, current_run_tasks, context, generated_subtasks):
    
-    prompt = f""" you are a robot trying to achieve the goal through sequential steps
-    Given the task '{task}', the current state '{state}',
-    and the following history of completed tasks: '{current_run_tasks}',
-    {remaining_decompositions} decompositions remaining before failing,
-    and the following capabilities: '{capabilities_input}',
-    Consider the context: '{context}' to guide the decomposition process. Focus **strictly** on the **critical and unique steps** necessary to achieve the task's goal while avoiding unnecessary, overly detailed, or redundant subtasks.
-    Avoid generating subtasks that simply repeat or closely resemble the main task or any tasks in '{generated_subtasks}'
+    prompt = f"""
+        You are a robot tasked with achieving the goal by executing **sequential and critical steps** in a structured and efficient manner. Your goal is to decompose the task into primitive, actionable subtasks that strictly adhere to the provided capabilities.
 
-    ** DO NOT START THE SENTENCE with something rather than the {capabilities_input}**
-    *** Make sure each task start with one of the given capabilities input lis {capabilities_input}***
-    example: words like "categorize, group,etc" should not be used instead words that are present in the list {capabilities_input} should be used
+        **Input Details:**
+        - **Task:** '{task}'
+        - **Current State:** '{state}'
+        - **Completed Tasks History:** '{current_run_tasks}'
+        - **Remaining Decompositions Before Failure:** {remaining_decompositions}
+        - **Capabilities:** '{capabilities_input}'
+        - **Context:** '{context}'
+        - **Generated Subtasks So Far:** '{generated_subtasks}'
 
-    *** Keep in mind that: You are a robot trying to achieve the goal, give tasks that mimic the robot behavior    
+        Leverage the context: '{context}' to guide the decomposition process. Ensure that each generated subtask is **critical**, **unique**, and directly contributes to achieving the task's goal. Avoid including unnecessary, overly detailed, redundant, or vague steps.
 
-    decompose the task into a step-by-step plan that are a bit detailed but NOT overly detailed or decomposed.
-    Provide ONLY the subtasks as a Python list of strings, without any additional text or explanations.
-    Ensure that the subtasks are granular enough to be executed directly without further decomposition.
-    Do not explain or summarize, and ensure the task starts directly with one of the provided capabilities list {capabilities_input}
-    - **Do not generate subtasks that simply repeat or closely resemble the task given* Focus on new, unique actions.    
-     
-    -DO NOT GENERATE REPEATED SUBTASKS , make sure each one is distinct and cooperate into achieving the original task
-    - Only provide **primitive actions** (e.g., 'move', 'grab', 'dust') and **avoid repeating** high-level tasks like the one already given. 
+        **Guidelines for Subtask Generation:**
+        1. **Strict Adherence to Capabilities:**
+        # - ***Every subtask **must start with an action** from the provided list of capabilities: {capabilities_input}.
+        - Avoid using generic terms such as "categorize" or "group" or "read" unless they explicitly match the capability list.
+        - Avoid generating subtasks that repeat or closely resemble each other or the original task.
+
+        2. **Focus on Primitive Actions:**
+        - Subtasks must be granular and executable directly by the robot without requiring further decomposition.
+        - Do not include high-level tasks similar to the main task or previously completed tasks.
+        - Avoid generating subtasks for verification (verify, confirm , etc)
+        - ****do not generate subtasks like "repeat for all", "repeat" etc.****
+
+        3. **Uniqueness and Relevance:**
+        - Each subtask must be distinct, new, and necessary to achieve the main task.
+        - Avoid redundant, overly detailed, or irrelevant steps.
+        - Ensure subtasks cooperate to achieve the original task without duplicating efforts.
+        - Avoid generating the task provided again.
+
+        4. **Conciseness and Precision:**
+        - Provide only the list of subtasks as a Python list of strings.
+        - Do not add any explanations, summaries, or non-critical information.
+
+        5. **Ensure Full Coverage**:
+        - Subtasks must collectively address **all aspects of the task** described in the goal, including preparation, execution, and finalization phases.
+        - Review the list to ensure that no critical steps are omitted. Add steps as necessary to cover all phases.
 
 
-    Example format: ['subtask1', 'subtask2', 'subtask3']"""
+        **Formatting Requirements:**
+        - Example Output: ['subtask1', 'subtask2', 'subtask3']
+        - Subtasks must be clear, concise, and actionable.
 
+        **Keep in Mind:**
+        - The robot's behavior must mimic real-world execution, focusing on what a robot can practically perform using the specified capabilities.
+        - Avoid generating subtasks that repeat or closely resemble each other or the original task.
 
-    
-   
-   
-    # prompt = f"""
-    #         Given the task: '{task}' 
-    #         and the current state: '{state}',
-
-    #         With the following history of completed tasks: '{current_run_tasks}',
-
-    #         {remaining_decompositions} decompositions remaining before failing,
-    #         and the following capabilities: '{capabilities_input}',
-
-    #         Consider the context: '{context}' to guide the decomposition process. Focus **strictly** on the **critical and unique steps** necessary to achieve the task's goal while avoiding unnecessary, overly detailed, or redundant subtasks.
-    #         decompose the task into a step-by-step plan that are a bit detailed but NOT overly detailed or decomposed.
-
-    #         ### Rules for Subtasks:
-    #         1. Generate **no more than 3-5 essential subtasks** that are strictly necessary for achieving the task.
-    #         2. Each subtask must:
-    #             - Begin with an **actionable verb** strictly listed in '{capabilities_input}'.
-    #             - Be concise and unique, avoiding duplication of completed tasks or subtasks in '{generated_subtasks}'.
-    #             - Directly align with the main task and the provided context.
-    #         3. Reject subtasks that:
-    #             - Restate or paraphrase the main task.
-    #             - Are overly fine-grained, trivial, or out of scope.
-    #             - Use verbs or actions not explicitly listed in '{capabilities_input}'.
-
-    #         ### Formatting Instructions:
-    #         - Respond only with a **Python list of strings**.
-    #         - Do not include explanations, extra details, or formatting beyond the list.
-    #         - Example response format:
-    #         ['subtask1', 'subtask2', 'subtask3']
-    #     """
+        Decompose the task '{task}' into an actionable step-by-step plan following these guidelines and constraints.
+        """
 
     response = call_groq_api(prompt, strip=True)
     # print("subtasks of response", response)
@@ -142,44 +104,53 @@ def get_subtasks(task, state, remaining_decompositions, capabilities_input, curr
     return []
     
 def get_subtasks_with_context(task, state, remaining_decompositions, capabilities_input, context, current_run_tasks, generated_subtasks):
-    """
-    Generate subtasks using task, state, and context to ensure subtasks are aligned with updated context.
-    """
     
-    print(f"Given the task '{task}', the current state '{state}', and the following history of completed tasks: '{current_run_tasks}'",
-
-    f"you have {remaining_decompositions} decomposition steps remaining to achieve the goal."
-
-    f"Capabilities available: '{capabilities_input}' "
-
-    f"Context to guide the decomposition: '{context}'")
-
 
     prompt = f"""
-    Given the task '{task}', the current state '{state}', and the following history of completed tasks: '{current_run_tasks}',
+            You are a robot tasked with achieving the goal of decomposing tasks into actionable subtasks using the provided updated context.
 
-    you have {remaining_decompositions} decomposition steps remaining to achieve the goal.
+            **Input Details:**
+            - **Task:** '{task}'
+            - **Current State:** '{state}'
+            - **Completed Tasks History:** '{current_run_tasks}'
+            - **Remaining Decompositions Before Failure:** {remaining_decompositions}
+            - **Capabilities:** '{capabilities_input}'
+            - **Updated Context:** '{context}'
+            - **Generated Subtasks:** '{generated_subtasks}'
 
-    Capabilities available: '{capabilities_input}' 
+            **Guidelines for Subtask Generation:**
+            1. **Leverage Updated Context:**
+            - Ensure the generated subtasks utilize and align with the provided updated context.
+            - Prioritize actions that directly address the insights and requirements specified in the context.
 
-    Context to guide the decomposition: '{context}'
+            2. **Avoid Redundancy:**
+            - Exclude subtasks that duplicate previously completed tasks or closely resemble already generated subtasks.
+            - Do not include subtasks that restate the main task.
 
-    Decompose the task into actionable subtasks that effectively utilize the updated context. Ensure the steps are:
-    
-    - Essential to accomplish the task efficiently, avoiding redundant or unnecessary actions.
-    - Actionable and aligned with the specified capabilities, starting with one of the provided capability keywords.
-    - Prioritized based on the updated context to improve relevance and execution quality.
-    - Avoiding excessive detail or repetition.
-    - Limited to **3-7 high-priority subtasks** that directly contribute to achieving the task given the context and the main goal.
+            3. **Focus on Actionable and Relevant Steps:**
+            - Subtasks must begin with an action from the provided capabilities: {capabilities_input}.
+            - Ensure subtasks are granular, directly executable, and necessary for achieving the task.
 
-    **Output Format**: Provide ONLY a Python list of subtasks as strings. Do not include explanations or additional text.
-    **give the output only as the desired format and no  any additional texts.**
+            4. **Optimize for Efficiency:**
+            - Generate only the essential subtasks required to achieve the goal efficiently.
+            - Avoid overly detailed decomposition that adds unnecessary steps or complexity.
 
-    Example:
-    ['subtask1', 'subtask2', 'subtask3']
-    """
+            5. **Limit to Critical Steps:**
+            - Restrict the number of subtasks to a maximum of **3-15 actionable steps**.
+            - Each subtask must be distinct, contributing meaningfully to the overall goal.
+            - Avoid generating subtasks for verification (verify, confirm , etc)
+            - Avoid generating subtasks like "repeat for all"
+
+            **Critical Output Requirement:**
+            - Respond ONLY with a valid Python list of strings in the format: `['subtask1', 'subtask2', 'subtask3']`.
+            - DO NOT include any additional text, explanations, or formatting beyond the Python list.
+
+            **Output Example:**
+            ['subtask1', 'subtask2', 'subtask3']
+
+            Decompose the task '{task}' into subtasks following these guidelines and constraints.
+            """
     response = call_groq_api(prompt, strip=True)
-    print("get subtasks with context" , response)
     try:
         subtasks = eval(response)
         return subtasks if isinstance(subtasks, list) else []
@@ -188,6 +159,7 @@ def get_subtasks_with_context(task, state, remaining_decompositions, capabilitie
         return []
 
 def is_task_similar(task_name, current_run_tasks, thresholdofsimilar=0.97):
+    print("is the task repeated?")
     # start_time = time.time()
     # print("inside is task similar")
     if not current_run_tasks:
@@ -224,7 +196,8 @@ def is_task_similar(task_name, current_run_tasks, thresholdofsimilar=0.97):
         # Check for similarity against the threshold
         for run_task, score in similarity_scores.items():
             if float(score) >= thresholdofsimilar:
-                print(f"[INFO] Task '{task_name}' is similar to '{run_task}' with score {score} (threshold: {thresholdofsimilar})")
+                print(f"Task '{task_name}' is similar to '{run_task}' with score {score} (threshold: {thresholdofsimilar})")
+                
                 # elapsed_time = time.time() - start_time
                 # print(f"Elapsed time for operation: {elapsed_time:.2f} seconds")
                 return True
@@ -237,7 +210,8 @@ def is_task_similar(task_name, current_run_tasks, thresholdofsimilar=0.97):
 
     # elapsed_time = time.time() - start_time
     # print(f"Elapsed time for operation: {elapsed_time:.2f} seconds")
-    # print(f"Task '{task_name}' is not similar to any of the current run tasks.")
+    print(f"Task '{task_name}' is not similar to any of the current run tasks.")
     return False
+
 
 

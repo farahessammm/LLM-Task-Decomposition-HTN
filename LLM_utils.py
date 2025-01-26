@@ -38,7 +38,7 @@ def calculate_similarity(parent_task, subtask,  goal_embedding=None):
     
     # Compute similarity
     similarity_score = util.pytorch_cos_sim(parent_embedding, subtask_embedding).item()
-    return similarity_score
+    return round(similarity_score, 3)
 
 
 @trace_function_calls
@@ -71,7 +71,7 @@ def is_task_primitive(task_name):
         'place', 'put', 'insert', 'remove', 'open', 'close', 'clean',
         'wipe', 'sweep', 'mop', 'vacuum', 'dust', 'wash', 'rinse', 'cook', 'heat',
         'boil', 'fry', 'bake', 'microwave', 'cut', 'slice', 'dice', 'chop', 'examine',
-        'grate', 'peel', 'mix', 'blend', 'stir', 'pour', 'serve', 'stop', 'scan', 'activate'
+        'grate', 'peel', 'mix', 'blend', 'stir', 'pour', 'serve', 'stop', 'scan', 'activate','measure', 'read'
         ]
 
     for word in task_words:
@@ -95,16 +95,19 @@ def compress_capabilities(text):
     return response
 
 def can_execute(task, capabilities, state):
-    # Make sure state is concise and relevant
-  # Keep only the first line, for example
-    # print({task} , {state}, {capabilities})
+    print("Can the task be executed?")
     prompt = (
         f"Task: '{task}'\n"
         f"Current State: '{state}'\n"
         f"Available Capabilities: {capabilities}\n"
-        "Given the task, current state, and available capabilities, determine if this task can be executed directly:\n"
-        "- If the task explicitly matches any of the listed capabilities and does not require further decomposition, answer 'True'.\n"
-        "- Otherwise, answer 'False'.\n"
+        "Determine whether the task can be executed directly or if it requires further decomposition based on:\n"
+        "- Available capabilities (e.g., does the task align directly with the listed capabilities?).\n"
+        "- Execution granularity (e.g., is the task a high-level goal or a low-level action?).\n"
+        "\n"
+        "Guidelines:\n"
+        "- If the task is **simple** and matches available capabilities, answer 'True'.\n"
+        "- If the task is **complex**, requires multiple steps, or involves actions not directly supported by the capabilities, answer 'False'.\n"
+        "\n"
         "Provide your answer as 'True' or 'False' only."
     )
     # print("inside can_execute")
@@ -112,8 +115,10 @@ def can_execute(task, capabilities, state):
     response = call_groq_api(prompt, strip=True)
     # print("can execute response", response)
 
-    log_response("can_execute", response)
+    log_response("can_execute", response)   
+    print(f"{response}")
     return response.lower() == "true"
+    
 
 def log_state_change(prev_state, new_state, task):
     log_dir = "../state_changes"

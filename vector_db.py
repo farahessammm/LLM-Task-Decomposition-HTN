@@ -12,7 +12,7 @@ class VectorDB:
     def add_task_node(self, task_node):
         # metadata = serialize_task_node(task_node)
         metadata = serialize_task_node(task_node)
-        print("metadata: ", metadata)
+        # print("metadata: ", metadata)
       #  self.collection.upsert(documents=[task_node.task_name], ids=[task_node.node_name], metadatas=[metadata])
         self.collection.upsert(documents=[task_node.task_name], ids=[task_node.node_name])
 
@@ -28,7 +28,7 @@ class VectorDB:
     def add_task_node(self, task_node):
         # metadata = serialize_task_node(task_node)
         metadata = serialize_task_node(task_node)
-        print("metadata: ", metadata)
+        # print("metadata: ", metadata)
       #  self.collection.upsert(documents=[task_node.task_name], ids=[task_node.node_name], metadatas=[metadata])
         self.collection.upsert(documents=[task_node.task_name], ids=[task_node.node_name])
 

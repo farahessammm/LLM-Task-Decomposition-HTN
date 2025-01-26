@@ -41,6 +41,7 @@ class TaskNode:
         f"Avoid reasoning that are not essential to complete the task."
         )
         response = call_groq_api(reasoning_prompt)
+
         reasoning_step = response.choices[0].message.content.strip()
         # print(f"reasoning for the task {self.task_name} : " , reasoning_step)
         self.add_reasoning(reasoning_step)

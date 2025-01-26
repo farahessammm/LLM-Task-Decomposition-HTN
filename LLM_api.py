@@ -12,7 +12,7 @@ RATE_LIMIT = 60
 
 @sleep_and_retry
 @limits(calls=CALLS, period=RATE_LIMIT)
-def call_groq_api(prompt, max_tokens=None, temperature=1.0, strip=False):
+def call_groq_api(prompt, max_tokens=None, temperature=0.7, strip=False):
     start_time = time.time()
     retries = 3
     delay = 5

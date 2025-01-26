@@ -13,6 +13,7 @@ app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+
 @trace_function_calls
 def task_node_to_dict(task_node):
     if task_node is None:
